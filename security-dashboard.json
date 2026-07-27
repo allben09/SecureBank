@@ -1,0 +1,269 @@
+{
+  "title": "SecureBank Security Dashboard",
+  "uid": "securebank-security",
+  "panels": [
+    {
+      "title": "Active Threats",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "sum(security_threats_total)",
+          "legendFormat": "Total Threats"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Threats by Type",
+      "type": "piechart",
+      "targets": [
+        {
+          "expr": "sum by (threat_type) (security_threats_total)",
+          "legendFormat": "{{threat_type}}"
+        }
+      ]
+    },
+    {
+      "title": "Threat Severity Distribution",
+      "type": "bargauge",
+      "targets": [
+        {
+          "expr": "sum by (severity) (security_threats_total)",
+          "legendFormat": "{{severity}}"
+        }
+      ]
+    },
+    {
+      "title": "API Request Rate & Blocked Requests",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(api_requests_total[5m])",
+          "legendFormat": "Requests/sec"
+        },
+        {
+          "expr": "rate(api_requests_blocked_total[5m])",
+          "legendFormat": "Blocked/sec",
+          "color": "red"
+        }
+      ]
+    },
+    {
+      "title": "SSL/TLS Certificate Expiry",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "ssl_certificate_days_remaining",
+          "legendFormat": "Days Remaining"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 7
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Failed Login Attempts",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(auth_failed_total[5m])",
+          "legendFormat": "Failed Attempts/sec"
+        }
+      ]
+    },
+    {
+      "title": "Top Attack Sources (IPs)",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "topk(10, sum by (source_ip) (security_threats_total))",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Vulnerability Scan Results",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "vulnerability_scan_results",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "MFA Adoption Rate",
+      "type": "gauge",
+      "targets": [
+        {
+          "expr": "(sum(mfa_enabled_users) / sum(total_users)) * 100",
+          "legendFormat": "MFA Usage"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 70
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Security Headers Status",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "security_headers_configured",
+          "legendFormat": "Headers Configured"
+        }
+      ]
+    },
+    {
+      "title": "OWASP Top 10 Vulnerabilities",
+      "type": "piechart",
+      "targets": [
+        {
+          "expr": "sum by (vulnerability_type) (owasp_vulnerabilities_total)",
+          "legendFormat": "{{vulnerability_type}}"
+        }
+      ]
+    },
+    {
+      "title": "Incident Response Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "incident_response_time_seconds",
+          "legendFormat": "Response Time (seconds)"
+        }
+      ]
+    },
+    {
+      "title": "Security Score",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "security_score",
+          "legendFormat": "Score"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "type": "query",
+        "query": "label_values(environment)",
+        "current": {
+          "selected": true,
+          "text": "production",
+          "value": "production"
+        }
+      },
+      {
+        "name": "severity",
+        "type": "query",
+        "query": "label_values(severity)",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": ["Critical", "High"],
+          "value": ["Critical", "High"]
+        }
+      }
+    ]
+  },
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "browser"
+    }
