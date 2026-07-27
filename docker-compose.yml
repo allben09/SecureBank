@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # ========== INTERNET SECURITY: Nginx Reverse Proxy ==========
+  nginx:
+    image: nginx:alpine
+    container_name: securebank-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - nodejs-api
+      - go-auth
+      - python-threat
+    networks:
+      - securebank-network
+
+  # Node.js API Service
+  nodejs-api:
+    build: ./backend-nodejs
+    container_name: securebank-nodejs
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - ALLOWED_ORIGIN=https://localhost
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - securebank-network
+
+  # Go Auth Service
+  go-auth:
+    build: ./backend-go
+    container_name: securebank-go
+    environment:
+      - PORT=8080
+      - JWT_SECRET=${JWT_SECRET}
+    networks:
+      - securebank-network
+
+  # Python Threat Detection
+  python-threat:
+    build: ./backend-python
+    container_name: securebank-python
+    environment:
+      - PORT=8000
+      - MODEL_PATH=/app/models
+    volumes:
+      - ./models:/app/models
+    networks:
+      - securebank-network
+
+  # Rust Scanner Service
+  rust-scanner:
+    build: ./rust-modules
+    container_name: securebank-rust
+    environment:
+      - RUST_LOG=info
+    networks:
+      - securebank-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: securebank-db
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=securebank
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - securebank-network
+
+  # Redis for Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: securebank-redis
+    networks:
+      - securebank-network
+
+  # ========== APP SECURITY: Vulnerability Scanner ==========
+  owasp-zap:
+    image: zaproxy/zap-stable
+    container_name: securebank-zap
+    command: zap-x.sh -daemon -host 0.0.0.0 -port 8090 -config api.disablekey=true
+    ports:
+      - "8090:8090"
+    networks:
+      - securebank-network
+
+networks:
+  securebank-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
