@@ -1,0 +1,154 @@
+name: 🛡️ Security Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *'  # Daily scan
+
+jobs:
+  # ========== APP SECURITY: SAST ==========
+  sast:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: [javascript, python, go, rust]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      # Node.js SAST
+      - name: Node.js Security Scan
+        if: matrix.language == 'javascript'
+        run: |
+          cd backend-nodejs
+          npm install
+          npm audit --audit-level=high
+          npx snyk test
+      
+      # Python SAST
+      - name: Python Security Scan
+        if: matrix.language == 'python'
+        run: |
+          cd backend-python
+          pip install bandit safety
+          bandit -r . -f json -o bandit-report.json
+          safety check
+      
+      # Go SAST
+      - name: Go Security Scan
+        if: matrix.language == 'go'
+        run: |
+          cd backend-go
+          go mod download
+          go vet ./...
+          gosec ./...
+      
+      # Rust SAST
+      - name: Rust Security Scan
+        if: matrix.language == 'rust'
+        run: |
+          cd rust-modules
+          cargo audit
+          cargo clippy -- -D warnings
+
+  # ========== APP SECURITY: DAST ==========
+  dast:
+    name: Dynamic Analysis
+    runs-on: ubuntu-latest
+    needs: sast
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Start Services
+        run: |
+          docker-compose -f docker-compose.yml up -d
+          sleep 30
+      
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.8.0
+        with:
+          target: 'http://localhost'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+      
+      - name: Nmap Scan
+        run: |
+          nmap -sV -sC localhost
+      
+      - name: Nikto Scan
+        run: |
+          nikto -h http://localhost -Format json -o nikto-report.json
+
+  # ========== APP SECURITY: Dependency Scanning ==========
+  dependency-scan:
+    name: Dependency Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'SecureBank'
+          path: '.'
+          format: 'HTML'
+          out: 'reports'
+      
+      - name: Upload Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: reports/
+
+  # ========== CYBERSECURITY: Threat Intelligence ==========
+  threat-intel:
+    name: Threat Intelligence
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check for Exposed Secrets
+        run: |
+          # Check for hardcoded secrets
+          grep -r "API_KEY\|SECRET\|PASSWORD" --exclude-dir={node_modules,venv,target,dist} . || true
+      
+      - name: Check for Vulnerable Dependencies
+        run: |
+          # Use OSS Index
+          curl -s https://ossindex.sonatype.org/api/scan | \
+            jq '.vulnerabilities'
+      
+      - name: Generate Security Report
+        run: |
+          echo "# Security Report" > report.md
+          echo "## Scan Date: $(date)" >> report.md
+          echo "" >> report.md
+          echo "### Findings" >> report.md
+          # Add findings from all scans
+      
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: report.md
+
+  # ========== INTERNET SECURITY: SSL/TLS Check ==========
+  tls-check:
+    name: SSL/TLS Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Test SSL Labs
+        run: |
+          curl -s https://api.ssllabs.com/api/v4/analyze?host=localhost | \
+            jq '.endpoints[].grade'
+      
+      - name: Check Certificate Expiry
+        run: |
+          openssl s_client -connect localhost:443 </dev/null 2>/dev/null | \
+            openssl x509 -noout -enddate
